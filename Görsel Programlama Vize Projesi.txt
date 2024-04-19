@@ -1,0 +1,149 @@
+public class Film
+{
+    public int Id { get; set; }
+    public string FilmAdi { get; set; }
+    public ICollection<Seans> Seanslar { get; set; }
+}
+
+public class Salon
+{
+    public int Id { get; set; }
+    public string SalonAdi { get; set; }
+    public int KoltukKapasitesi { get; set; }
+    public ICollection<Seans> Seanslar { get; set; }
+}
+
+public class Seans
+{
+    public int Id { get; set; }
+    public DateTime TarihSaat { get; set; }
+    public int FilmId { get; set; }
+    public Film Film { get; set; }
+    public int SalonId { get; set; }
+    public Salon Salon { get; set; }
+    public ICollection<Musteri> Musteriler { get; set; }
+}
+
+public class Musteri
+{
+    public int Id { get; set; }
+    public string Ad { get; set; }
+    public string Soyad { get; set; }
+    public int KoltukNo { get; set; }
+    public int SeansId { get; set; }
+    public Seans Seans { get; set; }
+}
+using Microsoft.EntityFrameworkCore;
+
+public class SinemaContext : DbContext
+{
+    public DbSet<Film> Filmler { get; set; }
+    public DbSet<Salon> Salonlar { get; set; }
+    public DbSet<Seans> Seanslar { get; set; }
+    public DbSet<Musteri> Musteriler { get; set; }
+
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        optionsBuilder.UseSqlite(@"Data Source=sinema.db");
+    }
+}
+public partial class MainForm : Form
+{
+    private SinemaContext context;
+
+    public MainForm()
+    {
+        InitializeComponent();
+        context = new SinemaContext();
+    }
+
+    private void MainForm_Load(object sender, EventArgs e)
+    {
+        FilmTabLoad();
+        SalonTabLoad();
+        SeansTabLoad();
+    }
+
+    private void FilmTabLoad()
+    {
+        // Film tab yüklenirken burada Film listesi getirilip DataGridView'e yüklenir.
+        dgvFilmler.DataSource = context.Filmler.ToList();
+    }
+
+    private void SalonTabLoad()
+    {
+        // Salon tab yüklenirken burada Salon listesi getirilip DataGridView'e yüklenir.
+        dgvSalonlar.DataSource = context.Salonlar.ToList();
+    }
+
+    private void SeansTabLoad()
+    {
+        // Seans tab yüklenirken burada Seans listesi getirilip DataGridView'e yüklenir.
+        dgvSeanslar.DataSource = context.Seanslar.Include(s => s.Film).Include(s => s.Salon).ToList();
+    }
+
+    private void btnFilmKaydet_Click(object sender, EventArgs e)
+    {
+        var film = new Film
+        {
+            FilmAdi = txtFilmAdi.Text
+        };
+        context.Filmler.Add(film);
+        context.SaveChanges();
+        FilmTabLoad();
+    }
+
+    private void btnSalonKaydet_Click(object sender, EventArgs e)
+    {
+        var salon = new Salon
+        {
+            SalonAdi = txtSalonAdi.Text,
+            KoltukKapasitesi = Convert.ToInt32(txtKoltukKapasitesi.Text)
+        };
+        context.Salonlar.Add(salon);
+        context.SaveChanges();
+        SalonTabLoad();
+    }
+
+    private void btnSeansKaydet_Click(object sender, EventArgs e)
+    {
+        var seans = new Seans
+        {
+            TarihSaat = dtpSeansTarihi.Value,
+            FilmId = (int)cmbFilm.SelectedValue,
+            SalonId = (int)cmbSalon.SelectedValue
+        };
+        context.Seanslar.Add(seans);
+        context.SaveChanges();
+        SeansTabLoad();
+    }
+
+    private void dgvSeanslar_CellClick(object sender, DataGridViewCellEventArgs e)
+    {
+        int seansId = (int)dgvSeanslar.Rows[e.RowIndex].Cells["Id"].Value;
+        var seans = context.Seanslar.Include(s => s.Musteriler).FirstOrDefault(s => s.Id == seansId);
+
+        if (seans != null)
+        {
+            // Koltukları kontrol edip boş olanları listeye ekleyin
+            List<int> bosKoltuklar = Enumerable.Range(1, context.Salonlar.Find(seans.SalonId).KoltukKapasitesi)
+                                                .Except(seans.Musteriler.Select(m => m.KoltukNo))
+                                                .ToList();
+            cmbKoltukNo.DataSource = bosKoltuklar;
+        }
+    }
+
+    private void btnMusteriKaydet_Click(object sender, EventArgs e)
+    {
+        var musteri = new Musteri
+        {
+            Ad = txtMusteriAd.Text,
+            Soyad = txtMusteriSoyad.Text,
+            KoltukNo = (int)cmbKoltukNo.SelectedValue,
+            SeansId = (int)dgvSeanslar.SelectedRows[0].Cells["Id"].Value
+        };
+        context.Musteriler.Add(musteri);
+        context.SaveChanges();
+    }
+}
+
